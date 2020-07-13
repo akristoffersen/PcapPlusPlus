@@ -121,6 +121,13 @@ namespace pcpp
 		T* front() { return m_Vector.front(); }
 
 		/**
+		 * Returns a pointer of the last element in the vector
+		 * if empty, result is undefined.
+		 * @return A pointer of the first element in the vector
+		 */
+		T* back() { return m_Vector.back(); }
+
+		/**
 		 * Removes from the vector a single element (position). Once the element is erased, it's also freed
 		 * @param[in] position The position of the element to erase
 		 * @return An iterator pointing to the new location of the element that followed the last element erased by the function call

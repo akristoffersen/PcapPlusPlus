@@ -135,8 +135,8 @@ void DnsLayer::parseResources()
 
 	if (numOfOtherResources > 300)
 	{
-		LOG_ERROR("DNS layer contains more than 300 resources, probably a bad packet. "
-				"Skipping parsing DNS resources");
+		// LOG_ERROR("DNS layer contains more than 300 resources, probably a bad packet. "
+		// 		"Skipping parsing DNS resources");
 		return;
 	}
 

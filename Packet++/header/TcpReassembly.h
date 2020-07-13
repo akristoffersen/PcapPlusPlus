@@ -91,11 +91,12 @@ struct ConnectionData
 	timeval startTime;
 	/** End TimeStamp of the connection */
 	timeval endTime;
-
+	/** Boolean for whether there are missing bytes in this connection */
+	bool missingBytes;
 	/**
 	 * A c'tor for this struct that basically zeros all members
 	 */
-	ConnectionData() : srcPort(0), dstPort(0), flowKey(0), startTime(), endTime()  {}
+	ConnectionData() : srcPort(0), dstPort(0), flowKey(0), startTime(), endTime(), missingBytes(false) {}
 
 	/**
 	 * Set startTime of Connection
@@ -177,14 +178,20 @@ struct TcpReassemblyConfiguration
 	 */
 	uint32_t maxNumToClean;
 
+	/**  The time limit for fragment inside a connection's frag list to not be removed. This is a memory-saving measure, as older OOF packets will be flushed from the buffer.
+	 *  A lower value may reduce accuracy, but will decrease memory consumption. A value of 0 -- the default -- means that the time limit is not engaged.
+	 */
+	uint32_t fragListTimer;
+
 	/**
 	 * A c'tor for this struct
 	 * @param[in] removeConnInfo The flag indicating whether to remove the connection data after a connection is closed. The default is true
 	 * @param[in] closedConnectionDelay How long the closed connections will not be cleaned up. The value is expressed in seconds. If it's set to 0 the default value will be used. The default is 5.
 	 * @param[in] maxNumToClean The maximum number of items to be cleaned up per one call of purgeClosedConnections. If it's set to 0 the default value will be used. The default is 30.
+	 * @param[in] fragListTimer How long a fragment can stay inside of a fragList until it is deleted. The default is 0 -- not engaged.
 	 */
-	TcpReassemblyConfiguration(bool removeConnInfo = true, uint32_t closedConnectionDelay = 5, uint32_t maxNumToClean = 30) :
-		removeConnInfo(removeConnInfo), closedConnectionDelay(closedConnectionDelay), maxNumToClean(maxNumToClean)
+	TcpReassemblyConfiguration(bool removeConnInfo = true, uint32_t closedConnectionDelay = 5, uint32_t maxNumToClean = 30, uint32_t fragListTimer = 0) :
+		removeConnInfo(removeConnInfo), closedConnectionDelay(closedConnectionDelay), maxNumToClean(maxNumToClean), fragListTimer(fragListTimer)
 	{
 	}
 };
@@ -313,6 +320,12 @@ public:
 	TcpReassembly(OnTcpMessageReady onMessageReadyCallback, void* userCookie = NULL, OnTcpConnectionStart onConnectionStartCallback = NULL, OnTcpConnectionEnd onConnectionEndCallback = NULL, const TcpReassemblyConfiguration &config = TcpReassemblyConfiguration());
 
 	/**
+	 * A d'tor for this class. Frees all internal structures. Notice that if the d'tor is called while connections are still open, all data is lost and TcpReassembly#OnTcpConnectionEnd won't
+	 * be called for those connections
+	 */
+	~TcpReassembly();
+
+	/**
 	 * The most important method of this class which gets a packet from the user and processes it. If this packet opens a new connection, ends a connection or contains new data on an
 	 * existing connection, the relevant callback will be called (TcpReassembly#OnTcpMessageReady, TcpReassembly#OnTcpConnectionStart, TcpReassembly#OnTcpConnectionEnd)
 	 * @param[in] tcpData A reference to the packet to process
@@ -367,9 +380,13 @@ private:
 		uint32_t sequence;
 		size_t dataLength;
 		uint8_t* data;
+		timespec* time;
 
-		TcpFragment() : sequence(0), dataLength(0), data(NULL) {}
-		~TcpFragment() { delete [] data; }
+		TcpFragment() : sequence(0), dataLength(0), data(NULL), time(NULL) {}
+		~TcpFragment() { 
+			delete [] data; 
+			delete [] time; 
+		}
 	};
 
 	struct TcpOneSideData
@@ -385,16 +402,15 @@ private:
 
 	struct TcpReassemblyData
 	{
-		bool closed;
 		int8_t numOfSides;
 		int8_t prevSide;
 		TcpOneSideData twoSides[2];
 		ConnectionData connData;
 
-		TcpReassemblyData() : closed(false), numOfSides(0), prevSide(-1) {}
+		TcpReassemblyData() : numOfSides(0), prevSide(-1) {}
 	};
 	
-	typedef std::map<uint32_t, TcpReassemblyData> ConnectionList;
+	typedef std::map<uint32_t, TcpReassemblyData *> ConnectionList;
 	typedef std::map<time_t, std::list<uint32_t> > CleanupList;
 
 	OnTcpMessageReady m_OnMessageReadyCallback;
@@ -407,6 +423,7 @@ private:
 	bool m_RemoveConnInfo;
 	uint32_t m_ClosedConnectionDelay;
 	uint32_t m_MaxNumToClean;
+	uint32_t m_FragListTimer;
 	time_t m_PurgeTimepoint;
 
 	void checkOutOfOrderFragments(TcpReassemblyData* tcpReassemblyData, int8_t sideIndex, bool cleanWholeFragList);
@@ -416,6 +433,8 @@ private:
 	void closeConnectionInternal(uint32_t flowKey, ConnectionEndReason reason);
 
 	void insertIntoCleanupList(uint32_t flowKey);
+
+	void cleanFragList(TcpOneSideData* tcpOneSideData, timespec* currentTime, uint32_t timeLimit);
 };
 
 }
