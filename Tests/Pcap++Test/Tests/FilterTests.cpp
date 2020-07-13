@@ -222,6 +222,9 @@ PTF_TEST_CASE(TestPcapFilters_General_BPFStr)
 	PTF_ASSERT_FALSE(badFilter.verifyFilter());
 	PTF_ASSERT_FALSE(pcpp::IPcapDevice::verifyFilter("This is not a valid filter"));
 
+	//Test on valid filter
+	PTF_ASSERT_TRUE(pcpp::IPcapDevice::verifyFilter("port 20"));
+
 	//Test stolen from MacAddress test below
 	pcpp::MacAddress macAddr("00:13:c3:df:ae:18");
 	pcpp::BPFStringFilter bpfStringFilter("ether dst " + macAddr.toString());
@@ -251,6 +254,27 @@ PTF_TEST_CASE(TestPcapFilters_General_BPFStr)
 
 	rawPacketVec.clear();
 } // TestPcapFilters_General_BPFStr
+
+
+
+
+PTF_TEST_CASE(TestPcapFilters_matchPacketWithFilter_static)
+{
+	pcpp::RawPacketVector rawPacketVec;
+	pcpp::PcapFileReaderDevice fileReaderDev(EXAMPLE_PCAP_VLAN);
+	PTF_ASSERT_TRUE(fileReaderDev.open());
+	fileReaderDev.getNextPackets(rawPacketVec);
+	fileReaderDev.close();
+
+	//	Test empty BPFstring (the "ALL" filter) in combination with a "-" (example wrong filter)
+	for (pcpp::RawPacketVector::VectorIterator iter = rawPacketVec.begin(); iter != rawPacketVec.end(); iter++)
+	{
+		PTF_ASSERT_TRUE(pcpp::IPcapDevice::matchPacketWithFilter("", *iter));
+		PTF_ASSERT_FALSE(pcpp::IPcapDevice::matchPacketWithFilter("-", *iter));
+	}
+
+	rawPacketVec.clear();
+} // TestPcapFilters_matchPacketWithFilter_static
 
 
 
